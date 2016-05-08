@@ -2,6 +2,8 @@
 
 var mongoose = require('mongoose');
 var jwt = require('jsonwebtoken');
+var moment = require('moment');
+var bcrypt = require('bcryptjs');
 
 require('dotenv').config();
 
@@ -39,7 +41,20 @@ userSchema.statics.isLoggedIn = function(req, res, next) {
 };
 
 userSchema.statics.register = function(userObj, cb) {
-  this.create(userObj, cb);
+  User.findOne({username: userObj.username}, (err, dbUser) => {
+    if(err || dbUser) return cb(err || { error: 'Username not available.' })
+
+    bcrypt.hash(userObj.password, 12, (err, hash) => {
+      if(err) return cb(err);
+
+      var user = new User({
+        username: userObj.username,
+        password: hash
+      })
+
+      user.save(cb)
+    })
+  })
 };
 
 userSchema.statics.editProfile = function(userId, newUser, cb) {
@@ -54,18 +69,21 @@ userSchema.statics.authenticate = function(userObj, cb) {
   this.findOne({username: userObj.username}, (err, dbUser) => {
     if(err || !dbUser) return cb(err || { error: 'Login failed. Username or password incorrect.' });
 
-    if(dbUser.password !== userObj.password) {
-      return cb({error: 'Login failed. Username or password incorrect.'});
-    }
+    bcrypt.compare(userObj.password, dbUser.password, (err, isGood) => {
+      if(err || !isGood) return cb(err || { error: 'Login failed. Username or password incorrect.' });
 
-    var token = dbUser.makeToken();
+      var token = dbUser.makeToken();
 
-    cb(null, token);
+      cb(null, token);
+    })
   });
 };
 
 userSchema.methods.makeToken = function() {
-  var token = jwt.sign({ _id: this._id }, JWT_SECRET);
+  var token = jwt.sign({
+    _id: this._id,
+    exp: moment().add(1, 'day').unix() // in seconds
+   }, JWT_SECRET);
   return token;
 };
 

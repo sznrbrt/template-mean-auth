@@ -3,12 +3,13 @@
 var express = require('express');
 var router = express.Router();
 
+
 var User = require('../models/user');
 
-router.get('/', (req, res) => {
+router.get('/', User.isLoggedIn, (req, res) => {
   User.find({}, (err, users) => {
     res.status(err ? 400 : 200).send(err || users);
-  });
+  }).select({password: false});
 });
 
 //   /api/users/register
